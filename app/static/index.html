@@ -1,0 +1,1510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Article Analysis System</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/diff/5.1.0/diff.min.js"></script>
+    <style>
+        .bias-score {
+            transition: all 0.3s ease;
+        }
+        .bias-score:hover {
+            transform: scale(1.05);
+        }
+        .suggestion-card {
+            transition: all 0.2s ease;
+        }
+        .suggestion-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .comparison-view {
+            display: none;
+        }
+        .comparison-view.active {
+            display: block;
+        }
+        .diff-added {
+            background-color: #dcfce7;
+            color: #166534;
+            padding: 2px;
+            border-radius: 2px;
+        }
+        .diff-removed {
+            background-color: #fee2e2;
+            color: #991b1b;
+            padding: 2px;
+            border-radius: 2px;
+            text-decoration: line-through;
+        }
+        .diff-changed {
+            background-color: #fef3c7;
+            color: #92400e;
+            padding: 2px;
+            border-radius: 2px;
+        }
+        .diff-line {
+            padding: 2px 4px;
+            border-radius: 2px;
+            margin: 1px 0;
+        }
+        .diff-line:hover {
+            background-color: #f3f4f6;
+        }
+        .diff-line-number {
+            color: #6b7280;
+            font-size: 0.875rem;
+            padding-right: 1rem;
+            user-select: none;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .tab-button {
+            transition: all 0.3s ease;
+        }
+        .tab-button.active {
+            background-color: #4F46E5;
+            color: white;
+        }
+        /* Comparison View Styles */
+        .comparison-container {
+            display: flex;
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .comparison-column {
+            flex: 1;
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .comparison-column h4 {
+            margin-top: 0;
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 8px;
+        }
+
+        .article-content {
+            white-space: pre-wrap;
+            line-height: 1.6;
+            color: #2c3e50;
+        }
+
+        .analysis-summary {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .analysis-summary h4 {
+            margin-top: 0;
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 8px;
+        }
+
+        #analysis-summary-content {
+            line-height: 1.6;
+        }
+
+        .improvement-highlight {
+            background-color: #e8f4f8;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+
+        .suggestion-tag {
+            display: inline-block;
+            padding: 2px 8px;
+            margin: 2px;
+            border-radius: 12px;
+            font-size: 0.9em;
+            background-color: #3498db;
+            color: white;
+        }
+
+        .metric-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            margin: 2px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            background-color: #2ecc71;
+            color: white;
+        }
+
+        .warning-badge {
+            background-color: #e74c3c;
+        }
+
+        .info-badge {
+            background-color: #3498db;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-4xl font-bold text-center mb-8 text-gray-800">Article Analysis System</h1>
+        
+        <!-- Tab Navigation -->
+        <div class="flex justify-center space-x-4 mb-8">
+            <button class="tab-button active px-6 py-2 rounded-lg font-semibold" data-tab="curation">
+                <i class="fas fa-edit mr-2"></i>Article Curation
+            </button>
+            <button class="tab-button px-6 py-2 rounded-lg font-semibold" data-tab="keywords">
+                <i class="fas fa-tags mr-2"></i>Keyword Generation
+            </button>
+            <button class="tab-button px-6 py-2 rounded-lg font-semibold" data-tab="metadata">
+                <i class="fas fa-info-circle mr-2"></i>Metadata Generation
+            </button>
+            <button class="tab-button px-6 py-2 rounded-lg font-semibold" data-tab="tts">
+                <i class="fas fa-volume-up mr-2"></i>Text to Speech
+            </button>
+            <button class="tab-button px-6 py-2 rounded-lg font-semibold" data-tab="api-docs">
+                <i class="fas fa-book mr-2"></i>API Documentation
+            </button>
+        </div>
+
+        <!-- View Toggle -->
+        <div class="flex justify-center mb-6">
+            <button id="export-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition duration-200">
+                Export Analysis
+            </button>
+        </div>
+
+        <!-- Main Content Area -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- Input Section -->
+            <div class="bg-white rounded-lg shadow-lg p-6" id="input-section">
+                <h2 class="text-2xl font-semibold mb-4 text-gray-700">Article Input</h2>
+                
+                <!-- Tab-specific options -->
+                <div id="curation-options" class="tab-content active">
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2" for="article-content">
+                            Article Content
+                        </label>
+                        <textarea id="article-content" rows="10" 
+                            class="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:shadow-outline"
+                            placeholder="Paste your article content here..."></textarea>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2">Analysis Options</label>
+                        <div class="space-y-2">
+                            <label class="flex items-center">
+                                <input type="checkbox" class="form-checkbox" id="check-facts" checked>
+                                <span class="ml-2">Fact Checking</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" class="form-checkbox" id="check-bias" checked>
+                                <span class="ml-2">Bias Detection</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" class="form-checkbox" id="check-style" checked>
+                                <span class="ml-2">Style Analysis</span>
+                            </label>
+                        </div>
+                    </div>
+                    <button id="analyze-btn" 
+                        class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-200">
+                        Analyze Article
+                    </button>
+      </div>
+
+                <div id="keywords-options" class="tab-content">
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2" for="article-content">
+                            Article Content
+                        </label>
+                        <textarea id="article-content-keywords" rows="10" 
+                            class="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:shadow-outline"
+                            placeholder="Paste your article content here..."></textarea>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2">Keyword Options</label>
+                        <div class="space-y-2">
+                            <label class="block text-gray-700 text-sm">
+                                Maximum Keywords:
+                                <input type="number" id="max-keywords" min="1" max="50" value="15"
+                                    class="w-20 px-2 py-1 border rounded ml-2">
+                            </label>
+                        </div>
+                    </div>
+                    <button id="generate-keywords-btn" 
+                        class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-200">
+        Generate Keywords
+      </button>
+                </div>
+
+                <div id="metadata-options" class="tab-content">
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2" for="article-content">
+                            Article Content
+                        </label>
+                        <textarea id="article-content-metadata" rows="10" 
+                            class="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:shadow-outline"
+                            placeholder="Paste your article content here..."></textarea>
+                    </div>
+                    <button id="generate-metadata-btn" 
+                        class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-200">
+                        Generate Metadata
+                    </button>
+                </div>
+
+                <div id="tts-options" class="tab-content">
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2" for="tts-text">
+                            Text to Convert
+                        </label>
+                        <textarea id="tts-text" rows="10" 
+                            class="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:shadow-outline"
+                            placeholder="Enter text to convert to speech..."></textarea>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2">Voice Selection</label>
+                        <select id="voice-select" class="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:shadow-outline">
+                            <!-- Will be populated dynamically -->
+                        </select>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2">Audio Format</label>
+                        <div class="flex space-x-4">
+                            <label class="inline-flex items-center">
+                                <input type="radio" name="audio-format" value="wav" checked
+                                    class="form-radio text-purple-600">
+                                <span class="ml-2">WAV</span>
+                            </label>
+                            <label class="inline-flex items-center">
+                                <input type="radio" name="audio-format" value="mp3"
+                                    class="form-radio text-purple-600">
+                                <span class="ml-2">MP3</span>
+                            </label>
+                            <label class="inline-flex items-center">
+                                <input type="radio" name="audio-format" value="ogg"
+                                    class="form-radio text-purple-600">
+                                <span class="ml-2">OGG</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <button id="tts-btn" 
+                        class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg transition duration-200">
+                        <i class="fas fa-play mr-2"></i>Generate Speech
+      </button>
+
+                    <div id="tts-loading" class="hidden mt-4">
+                        <div class="flex items-center justify-center">
+                            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+                            <span class="ml-2">Generating speech...</span>
+                        </div>
+      </div>
+                    
+                    <audio id="tts-audio" controls class="w-full mt-4 hidden">
+                        <source src="" type="audio/wav">
+                        Your browser does not support the audio element.
+                    </audio>
+                </div>
+            </div>
+
+            <!-- Results Section -->
+            <div class="bg-white rounded-lg shadow-lg p-6" id="results-section">
+                <h2 class="text-2xl font-semibold mb-4 text-gray-700">Results</h2>
+                <div id="loading" class="hidden">
+                    <div class="flex items-center justify-center">
+                        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                        <span class="ml-2">Processing...</span>
+                    </div>
+  </div>
+
+                <!-- Tab-specific results -->
+                <div id="curation-results" class="tab-content active">
+                    <!-- View Toggle -->
+                    <div class="flex justify-end mb-4">
+                        <button id="toggle-view-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-200">
+                            <i class="fas fa-exchange-alt mr-2"></i>Show Comparison View
+                        </button>
+                    </div>
+
+                    <!-- Original View -->
+                    <div id="original-view" class="space-y-6">
+                        <!-- Bias Score -->
+                        <div class="bias-score bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-lg p-4">
+                            <h3 class="text-xl font-semibold mb-2">Bias Score</h3>
+                            <div class="flex items-center justify-between">
+                                <div class="text-4xl font-bold" id="bias-score">0</div>
+                                <div class="text-sm" id="bias-description">Neutral</div>
+                            </div>
+                        </div>
+
+                        <!-- Bias Categories -->
+                        <div class="grid grid-cols-2 gap-4" id="bias-categories">
+                            <!-- Will be populated dynamically -->
+                        </div>
+
+                        <!-- Suggestions -->
+                        <div class="space-y-4">
+                            <h3 class="text-xl font-semibold text-gray-700">Improvement Suggestions</h3>
+                            <div id="suggestions" class="space-y-3">
+                                <!-- Will be populated dynamically -->
+                            </div>
+                        </div>
+
+                        <!-- Fact Check Results -->
+                        <div class="space-y-4" id="fact-check-section">
+                            <h3 class="text-xl font-semibold text-gray-700">Fact Check Results</h3>
+                            <div id="fact-check-results" class="space-y-3">
+                                <!-- Will be populated dynamically -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Comparison View -->
+                    <div id="comparison-view" class="comparison-view space-y-6" style="display: none;">
+                        <div class="grid grid-cols-2 gap-4">
+                            <!-- Original Text -->
+                            <div class="space-y-4">
+                                <h3 class="text-xl font-semibold text-gray-700">Original Text</h3>
+                                <div id="original-text" class="bg-gray-50 p-4 rounded-lg font-mono text-sm whitespace-pre-wrap">
+                                    <!-- Will be populated dynamically -->
+                                </div>
+                            </div>
+                            <!-- Edited Text -->
+                            <div class="space-y-4">
+                                <h3 class="text-xl font-semibold text-gray-700">Edited Text</h3>
+                                <div id="edited-text" class="bg-gray-50 p-4 rounded-lg font-mono text-sm whitespace-pre-wrap">
+                                    <!-- Will be populated dynamically -->
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Changes Summary -->
+                        <div class="space-y-4">
+                            <h3 class="text-xl font-semibold text-gray-700">Changes Summary</h3>
+                            <div id="changes-summary" class="space-y-3">
+                                <!-- Will be populated dynamically -->
+                            </div>
+                        </div>
+                        <!-- Diff View -->
+                        <div class="space-y-4">
+                            <h3 class="text-xl font-semibold text-gray-700">Detailed Changes</h3>
+                            <div id="diff-view" class="bg-gray-50 p-4 rounded-lg font-mono text-sm">
+                                <!-- Will be populated dynamically -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="keywords-results" class="tab-content">
+                    <div class="space-y-4">
+                        <h3 class="text-xl font-semibold text-gray-700">Generated Keywords</h3>
+                        <div id="keywords-list" class="flex flex-wrap gap-2">
+                            <!-- Will be populated dynamically -->
+                        </div>
+                    </div>
+                </div>
+
+                <div id="metadata-results" class="tab-content">
+                    <div class="space-y-4">
+                        <h3 class="text-xl font-semibold text-gray-700">Article Metadata</h3>
+                        <div id="metadata-content" class="space-y-4">
+                            <!-- Will be populated dynamically -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Add new TTS tab content -->
+                <div id="tts-results" class="tab-content">
+                    <div class="space-y-4">
+                        <h3 class="text-xl font-semibold text-gray-700">Generated Audio</h3>
+                        <div id="tts-player" class="space-y-4">
+                            <!-- Will be populated dynamically -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- API Documentation Content -->
+        <div id="api-docs-options" class="tab-content">
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <div class="prose max-w-none">
+                    <h2 class="text-2xl font-bold mb-6">API Documentation</h2>
+                    
+                    <!-- Article Curation API -->
+                    <section class="mb-8">
+                        <h3 class="text-xl font-bold mb-4">Article Curation API</h3>
+                        <div class="bg-gray-50 p-4 rounded-lg mb-4">
+                            <p class="font-semibold">Endpoint:</p>
+                            <code class="bg-gray-100 p-2 rounded block mb-2">POST /curate_article/</code>
+                            
+                            <p class="font-semibold mt-4">Request Body:</p>
+                            <pre class="bg-gray-100 p-2 rounded block mb-2"><code>{
+    "content": "Article text to analyze",
+    "check_facts": true,              // Optional
+    "check_journalistic_standards": true,  // Optional
+    "check_style": true              // Optional
+}</code></pre>
+
+                            <p class="font-semibold mt-4">Response:</p>
+                            <pre class="bg-gray-100 p-2 rounded block mb-2"><code>{
+    "analysis": {
+        "readability": {
+            "score": 75.5,
+            "level": "Standard",
+            "suggestions": ["Consider simplifying complex sentences"]
+        },
+        "style": {
+            "formal": 0.8,
+            "academic": 0.3,
+            "journalistic": 0.6,
+            "conversational": 0.2
+        },
+        "bias_analysis": {
+            "emotional_bias": [],
+            "political_bias": [],
+            "gender_bias": [],
+            "overall_bias_score": 15
+        }
+    },
+    "fact_check": {
+        "claims": [
+            {
+                "text": "Claim text",
+                "confidence": 0.85,
+                "status": "verified",
+                "suggested_sources": ["source1", "source2"]
+            }
+        ]
+    }
+}</code></pre>
+                        </div>
+
+                        <h4 class="font-bold mb-2">Implementation Examples:</h4>
+                        
+                        <!-- Vanilla JavaScript -->
+                        <div class="mb-4">
+                            <h5 class="font-semibold">Vanilla JavaScript:</h5>
+                            <pre class="bg-gray-100 p-2 rounded block"><code>async function analyzeArticle(content) {
+    try {
+        const response = await fetch('http://localhost:8000/curate_article/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                content,
+                check_facts: true,
+                check_journalistic_standards: true,
+                check_style: true
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+        return result;
+    } catch (error) {
+        console.error('Error:', error);
+        throw error;
+    }
+}</code></pre>
+                        </div>
+
+                        <!-- React -->
+                        <div class="mb-4">
+                            <h5 class="font-semibold">React:</h5>
+                            <pre class="bg-gray-100 p-2 rounded block"><code>import { useState } from 'react';
+
+function ArticleAnalysis() {
+    const [analysis, setAnalysis] = useState(null);
+    const [loading, setLoading] = useState(false);
+
+    const analyzeArticle = async (content) => {
+        setLoading(true);
+        try {
+            const response = await fetch('http://localhost:8000/curate_article/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    content,
+                    check_facts: true,
+                    check_journalistic_standards: true,
+                    check_style: true
+                })
+            });
+
+            const result = await response.json();
+            setAnalysis(result);
+        } catch (error) {
+            console.error('Error:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div>
+            {/* Your UI components */}
+        </div>
+    );
+}</code></pre>
+                        </div>
+
+                        <!-- PHP -->
+                        <div class="mb-4">
+                            <h5 class="font-semibold">PHP:</h5>
+                            <pre class="bg-gray-100 p-2 rounded block"><code>function analyzeArticle($content) {
+    $url = 'http://localhost:8000/curate_article/';
+    
+    $data = [
+        'content' => $content,
+        'check_facts' => true,
+        'check_journalistic_standards' => true,
+        'check_style' => true
+    ];
+    
+    $options = [
+        'http' => [
+            'header'  => "Content-type: application/json\r\n",
+            'method'  => 'POST',
+            'content' => json_encode($data)
+        ]
+    ];
+    
+    $context = stream_context_create($options);
+    
+    try {
+        $result = file_get_contents($url, false, $context);
+        if ($result === FALSE) {
+            throw new Exception('Failed to analyze article');
+        }
+        
+        return json_decode($result, true);
+    } catch (Exception $e) {
+        error_log('Error analyzing article: ' . $e->getMessage());
+        throw $e;
+    }
+}</code></pre>
+                        </div>
+                    </section>
+
+                    <!-- Keyword Generation API -->
+                    <section class="mb-8">
+                        <h3 class="text-xl font-bold mb-4">Keyword Generation API</h3>
+                        <div class="bg-gray-50 p-4 rounded-lg mb-4">
+                            <p class="font-semibold">Endpoint:</p>
+                            <code class="bg-gray-100 p-2 rounded block mb-2">POST /generate_keywords/</code>
+                            
+                            <p class="font-semibold mt-4">Request Body:</p>
+                            <pre class="bg-gray-100 p-2 rounded block mb-2"><code>{
+    "content": "Article text to analyze",
+    "max_keywords": 15  // Optional
+}</code></pre>
+
+                            <p class="font-semibold mt-4">Response:</p>
+                            <pre class="bg-gray-100 p-2 rounded block mb-2"><code>{
+    "keywords": [
+        "keyword1",
+        "keyword2",
+        "keyword3"
+    ]
+}</code></pre>
+                        </div>
+
+                        <h4 class="font-bold mb-2">Implementation Examples:</h4>
+                        
+                        <!-- Node.js -->
+                        <div class="mb-4">
+                            <h5 class="font-semibold">Node.js:</h5>
+                            <pre class="bg-gray-100 p-2 rounded block"><code>const axios = require('axios');
+
+async function generateKeywords(content, maxKeywords = 15) {
+    try {
+        const response = await axios.post('http://localhost:8000/generate_keywords/', {
+            content,
+            max_keywords: maxKeywords
+        });
+        
+        return response.data.keywords;
+    } catch (error) {
+        console.error('Error generating keywords:', error);
+        throw error;
+    }
+}</code></pre>
+                        </div>
+
+                        <!-- Next.js -->
+                        <div class="mb-4">
+                            <h5 class="font-semibold">Next.js:</h5>
+                            <pre class="bg-gray-100 p-2 rounded block"><code>import { useState } from 'react';
+
+export default function KeywordGenerator() {
+    const [keywords, setKeywords] = useState([]);
+    const [loading, setLoading] = useState(false);
+
+    const generateKeywords = async (content) => {
+        setLoading(true);
+        try {
+            const response = await fetch('/api/generate-keywords', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ content })
+            });
+
+            const data = await response.json();
+            setKeywords(data.keywords);
+        } catch (error) {
+            console.error('Error:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div>
+            {/* Your UI components */}
+        </div>
+    );
+}</code></pre>
+                        </div>
+                    </section>
+
+                    <!-- Metadata Generation API -->
+                    <section class="mb-8">
+                        <h3 class="text-xl font-bold mb-4">Metadata Generation API</h3>
+                        <div class="bg-gray-50 p-4 rounded-lg mb-4">
+                            <p class="font-semibold">Endpoint:</p>
+                            <code class="bg-gray-100 p-2 rounded block mb-2">POST /generate_metadata/</code>
+                            
+                            <p class="font-semibold mt-4">Request Body:</p>
+                            <pre class="bg-gray-100 p-2 rounded block mb-2"><code>{
+    "content": "Article text to analyze"
+}</code></pre>
+
+                            <p class="font-semibold mt-4">Response:</p>
+                            <pre class="bg-gray-100 p-2 rounded block mb-2"><code>{
+    "title": "Generated Title",
+    "summary": "Article summary",
+    "categories": ["category1", "category2"],
+    "entities": {
+        "people": ["person1", "person2"],
+        "organizations": ["org1", "org2"],
+        "locations": ["location1", "location2"]
+    },
+    "word_count": 500,
+    "estimated_read_time": 3
+}</code></pre>
+                        </div>
+
+                        <h4 class="font-bold mb-2">Implementation Examples:</h4>
+                        
+                        <!-- Python -->
+                        <div class="mb-4">
+                            <h5 class="font-semibold">Python:</h5>
+                            <pre class="bg-gray-100 p-2 rounded block"><code>import requests
+
+def generate_metadata(content):
+    url = "http://localhost:8000/generate_metadata/"
+    
+    try:
+        response = requests.post(url, json={"content": content})
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        print(f"Error generating metadata: {e}")
+        raise</code></pre>
+                        </div>
+                    </section>
+
+                    <!-- Text-to-Speech API -->
+                    <section class="mb-8">
+                        <h3 class="text-xl font-bold mb-4">Text-to-Speech API</h3>
+                        <div class="bg-gray-50 p-4 rounded-lg mb-4">
+                            <p class="font-semibold">Endpoint:</p>
+                            <code class="bg-gray-100 p-2 rounded block mb-2">POST /text-to-speech/</code>
+                            
+                            <p class="font-semibold mt-4">Request Body:</p>
+                            <pre class="bg-gray-100 p-2 rounded block mb-2"><code>{
+    "text": "Text to convert to speech",
+    "voice_type": "professional",  // Optional
+    "output_format": "wav"         // Optional
+}</code></pre>
+
+                            <p class="font-semibold mt-4">Response:</p>
+                            <pre class="bg-gray-100 p-2 rounded block mb-2"><code>{
+    "audio_path": "/path/to/generated/audio.wav",
+    "duration": 10.5,
+    "format": "wav",
+    "voice_type": "professional"
+}</code></pre>
+                        </div>
+
+                        <h4 class="font-bold mb-2">Implementation Examples:</h4>
+                        
+                        <!-- JavaScript -->
+                        <div class="mb-4">
+                            <h5 class="font-semibold">JavaScript:</h5>
+                            <pre class="bg-gray-100 p-2 rounded block"><code>async function generateSpeech(text, options = {}) {
+    const defaultOptions = {
+        voiceType: 'professional',
+        outputFormat: 'wav'
+    };
+
+    const finalOptions = { ...defaultOptions, ...options };
+
+    try {
+        const response = await fetch('http://localhost:8000/text-to-speech/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                text,
+                voice_type: finalOptions.voiceType,
+                output_format: finalOptions.outputFormat
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const blob = await response.blob();
+        const audioUrl = URL.createObjectURL(blob);
+        return audioUrl;
+    } catch (error) {
+        console.error('Error generating speech:', error);
+        throw error;
+    }
+}</code></pre>
+                        </div>
+                    </section>
+
+                    <!-- Error Handling -->
+                    <section class="mb-8">
+                        <h3 class="text-xl font-bold mb-4">Error Handling</h3>
+                        <div class="bg-gray-50 p-4 rounded-lg mb-4">
+                            <p class="font-semibold">Error Response Format:</p>
+                            <pre class="bg-gray-100 p-2 rounded block mb-2"><code>{
+    "detail": "Error message description",
+    "error_type": "Error category",
+    "status_code": 400
+}</code></pre>
+
+                            <p class="font-semibold mt-4">Common Error Codes:</p>
+                            <ul class="list-disc list-inside mb-4">
+                                <li>400 Bad Request: Invalid input parameters</li>
+                                <li>422 Unprocessable Entity: Invalid request format</li>
+                                <li>500 Internal Server Error: Server-side processing error</li>
+                            </ul>
+                        </div>
+                    </section>
+
+                    <!-- Rate Limiting -->
+                    <section class="mb-8">
+                        <h3 class="text-xl font-bold mb-4">Rate Limiting</h3>
+                        <div class="bg-gray-50 p-4 rounded-lg mb-4">
+                            <p>The API implements rate limiting to ensure fair usage:</p>
+                            <ul class="list-disc list-inside mb-4">
+                                <li>100 requests per hour for text-to-speech</li>
+                                <li>200 requests per hour for article curation</li>
+                            </ul>
+
+                            <p class="font-semibold mt-4">Rate Limit Headers:</p>
+                            <pre class="bg-gray-100 p-2 rounded block mb-2"><code>X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 95
+X-RateLimit-Reset: 1625097600</code></pre>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Tab switching functionality
+        document.querySelectorAll('.tab-button').forEach(button => {
+            button.addEventListener('click', () => {
+                // Update active tab button
+                document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+                button.classList.add('active');
+
+                // Show corresponding content
+                const tabId = button.dataset.tab;
+                document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+                document.getElementById(`${tabId}-options`).classList.add('active');
+                document.getElementById(`${tabId}-results`).classList.add('active');
+
+                // Handle Export Analysis button visibility
+                const exportBtn = document.getElementById('export-btn');
+                if (tabId === 'api-docs') {
+                    exportBtn.style.display = 'none';
+                    document.getElementById('input-section').style.display = 'none';
+                    document.getElementById('results-section').style.display = 'none';
+                } else {
+                    exportBtn.style.display = 'block';
+                    document.getElementById('input-section').style.display = 'block';
+                    document.getElementById('results-section').style.display = 'block';
+                }
+            });
+        });
+
+        document.getElementById('analyze-btn').addEventListener('click', async function() {
+            const articleContent = document.getElementById('article-content').value;
+            if (!articleContent) {
+                alert('Please enter article content');
+                return;
+            }
+
+            console.log('Article content:', articleContent); // Debug log
+
+            const factCheck = document.getElementById('check-facts').checked;
+            const biasDetection = document.getElementById('check-bias').checked;
+            const styleAnalysis = document.getElementById('check-style').checked;
+
+            try {
+                this.disabled = true;
+                this.textContent = 'Analyzing...';
+
+                const response = await fetch('/curate_article/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        content: articleContent,
+                        check_facts: factCheck,
+                        check_journalistic_standards: biasDetection,
+                        check_style: styleAnalysis
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                console.log('Analysis result:', result); // Debug log
+                
+                // Update the comparison view with the original text and analysis results
+                updateComparisonView(articleContent, result);
+                
+                // Update the original view results
+                updateOriginalView(result);
+
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error analyzing article: ' + error.message);
+            } finally {
+                this.disabled = false;
+                this.textContent = 'Analyze Article';
+            }
+        });
+
+        function updateOriginalView(result) {
+            // Update bias score
+            if (result.journalistic_analysis && result.journalistic_analysis.bias_analysis) {
+                const biasAnalysis = result.journalistic_analysis.bias_analysis;
+                const biasScore = document.getElementById('bias-score');
+                const biasDescription = document.getElementById('bias-description');
+                
+                biasScore.textContent = Math.round(biasAnalysis.overall_bias_score);
+                biasDescription.textContent = getBiasDescription(biasAnalysis.overall_bias_score);
+                
+                // Update bias categories
+                updateBiasCategories(biasAnalysis);
+            }
+            
+            // Update suggestions
+            if (result.suggestions) {
+                updateSuggestions(result.suggestions);
+            }
+            
+            // Update fact check results
+            if (result.fact_check) {
+                updateFactCheck(result.fact_check);
+            }
+        }
+
+        function updateComparisonView(originalText, analysis) {
+            console.log('Starting updateComparisonView with:', { originalText, analysis }); // Debug log
+            
+            // Display original text
+            const originalTextElement = document.getElementById('original-text');
+            console.log('Original text element found:', originalTextElement); // Debug log
+            
+            if (!originalTextElement) {
+                console.error('Could not find original-text element');
+                return;
+            }
+            
+            originalTextElement.textContent = originalText;
+            console.log('Original text set to:', originalText); // Debug log
+            
+            // Generate and display edited text
+            const editedTextElement = document.getElementById('edited-text');
+            let editedText = originalText;
+            const changes = [];
+            
+            // Process style improvements
+            if (analysis.style_analysis) {
+                console.log('Processing style analysis:', analysis.style_analysis); // Debug log
+                const styleAnalysis = analysis.style_analysis;
+                
+                // Handle readability improvements
+                if (styleAnalysis.readability_scores && styleAnalysis.readability_scores.flesch_reading_ease < 60) {
+                    const sentences = editedText.match(/[^.!?]+[.!?]+/g) || [];
+                    editedText = sentences.map(sentence => {
+                        if (sentence.split(' ').length > 20) {
+                            changes.push({
+                                type: 'readability',
+                                description: `Simplified: "${sentence.trim()}"`,
+                                context: 'Complex sentence simplified'
+                            });
+                            return sentence.split(',').map(part => part.trim()).join('. ') + '.';
+                        }
+                        return sentence;
+                    }).join(' ');
+                }
+            }
+            
+            // Process fact-check improvements
+            if (analysis.fact_check && analysis.fact_check.claims) {
+                console.log('Processing fact check:', analysis.fact_check); // Debug log
+                analysis.fact_check.claims.forEach(claim => {
+                    if (claim.status === 'unverified' || claim.status === 'misleading') {
+                        changes.push({
+                            type: 'fact',
+                            description: `Verify claim: "${claim.text}"`,
+                            context: `Status: ${claim.status}, Confidence: ${(claim.confidence * 100).toFixed(1)}%`,
+                            sources: claim.suggested_sources
+                        });
+                        
+                        // Add verification note to the text
+                        const claimIndex = editedText.indexOf(claim.text);
+                        if (claimIndex !== -1) {
+                            editedText = editedText.slice(0, claimIndex + claim.text.length) + 
+                                       ' [Needs verification]' + 
+                                       editedText.slice(claimIndex + claim.text.length);
+                        }
+                    }
+                });
+            }
+            
+            // Process bias improvements
+            if (analysis.journalistic_analysis && analysis.journalistic_analysis.bias_analysis) {
+                console.log('Processing bias analysis:', analysis.journalistic_analysis.bias_analysis); // Debug log
+                const biasAnalysis = analysis.journalistic_analysis.bias_analysis;
+                
+                // Check for emotional bias
+                if (biasAnalysis.emotional_bias && biasAnalysis.emotional_bias.length > 0) {
+                    biasAnalysis.emotional_bias.forEach(bias => {
+                        changes.push({
+                            type: 'bias',
+                            description: `Reduced emotional bias: "${bias}"`,
+                            context: 'Emotional bias detected'
+                        });
+                    });
+                }
+                
+                // Check for political bias
+                if (biasAnalysis.political_bias && biasAnalysis.political_bias.length > 0) {
+                    biasAnalysis.political_bias.forEach(bias => {
+                        changes.push({
+                            type: 'bias',
+                            description: `Reduced political bias: "${bias}"`,
+                            context: 'Political bias detected'
+                        });
+                    });
+                }
+            }
+            
+            // Display edited text
+            editedTextElement.textContent = editedText;
+            console.log('Edited text:', editedText); // Debug log
+            
+            // Generate and display diff
+            const diffView = document.getElementById('diff-view');
+            
+            // Simple diff implementation
+            function generateDiff(original, edited) {
+                const originalLines = original.split('\n');
+                const editedLines = edited.split('\n');
+                let diffHTML = '';
+                let lineNumber = 1;
+                
+                // Compare lines
+                for (let i = 0; i < Math.max(originalLines.length, editedLines.length); i++) {
+                    const originalLine = originalLines[i] || '';
+                    const editedLine = editedLines[i] || '';
+                    
+                    if (originalLine === editedLine) {
+                        // Unchanged line
+                        diffHTML += `<div class="diff-line"><span class="diff-line-number">${lineNumber}</span>${originalLine}</div>`;
+                        lineNumber++;
+                    } else {
+                        // Changed line
+                        if (originalLine) {
+                            diffHTML += `<div class="diff-line"><span class="diff-line-number">${lineNumber}</span><span class="diff-removed">- ${originalLine}</span></div>`;
+                        }
+                        if (editedLine) {
+                            diffHTML += `<div class="diff-line"><span class="diff-line-number">${lineNumber}</span><span class="diff-added">+ ${editedLine}</span></div>`;
+                        }
+                        lineNumber++;
+                    }
+                }
+                
+                return diffHTML;
+            }
+            
+            // Generate and display the diff
+            const diffHTML = generateDiff(originalText, editedText);
+            diffView.innerHTML = diffHTML;
+            
+            // Update changes summary
+            const changesSummary = document.getElementById('changes-summary');
+            let summaryHTML = '';
+            
+            // Group changes by type
+            const groupedChanges = {
+                readability: [],
+                vocabulary: [],
+                fact: [],
+                bias: []
+            };
+            
+            changes.forEach(change => {
+                if (groupedChanges[change.type]) {
+                    groupedChanges[change.type].push(change);
+                }
+            });
+            
+            // Display grouped changes
+            Object.entries(groupedChanges).forEach(([type, changes]) => {
+                if (changes.length > 0) {
+                    const typeColors = {
+                        readability: 'green',
+                        vocabulary: 'blue',
+                        fact: 'yellow',
+                        bias: 'red'
+                    };
+                    
+                    summaryHTML += `
+                        <div class="mb-4">
+                            <h4 class="font-semibold text-gray-700 mb-2">${type.charAt(0).toUpperCase() + type.slice(1)} Changes (${changes.length})</h4>
+                            ${changes.map(change => `
+                                <div class="suggestion-card bg-${typeColors[type]}-50 border-l-4 border-${typeColors[type]}-400 p-4 mb-2">
+                                    <p class="text-gray-700">${change.description}</p>
+                                    ${change.context ? `<p class="text-sm text-gray-500 mt-1">Context: ${change.context}</p>` : ''}
+                                    ${change.sources ? `
+                                        <div class="mt-2">
+                                            <p class="text-sm font-semibold text-gray-600">Suggested Sources:</p>
+                                            <ul class="list-disc list-inside text-sm text-gray-500">
+                                                ${change.sources.map(source => `<li>${source}</li>`).join('')}
+                                            </ul>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                }
+            });
+            
+            changesSummary.innerHTML = summaryHTML;
+            console.log('Changes summary updated'); // Debug log
+        }
+
+        function getBiasDescription(score) {
+            if (score > 70) return 'High Bias';
+            if (score > 40) return 'Moderate Bias';
+            return 'Low Bias';
+        }
+
+        function updateBiasCategories(biasAnalysis) {
+            const container = document.getElementById('bias-categories');
+            container.innerHTML = '';
+
+            if (!biasAnalysis) return;
+
+            const categories = [
+                { key: 'emotional_bias', label: 'Emotional Bias', icon: 'fa-heart' },
+                { key: 'political_bias', label: 'Political Bias', icon: 'fa-balance-scale' },
+                { key: 'gender_bias', label: 'Gender Bias', icon: 'fa-venus-mars' },
+                { key: 'racial_bias', label: 'Racial Bias', icon: 'fa-globe' },
+                { key: 'tribal_bias', label: 'Tribal Bias', icon: 'fa-users' }
+            ];
+
+            categories.forEach(category => {
+                const count = biasAnalysis[category.key]?.length || 0;
+                const card = document.createElement('div');
+                card.className = 'bg-gray-50 rounded-lg p-4 text-center';
+                card.innerHTML = `
+                    <i class="fas ${category.icon} text-2xl mb-2 text-gray-600"></i>
+                    <h4 class="font-semibold text-gray-700">${category.label}</h4>
+                    <p class="text-gray-600">${count} instances</p>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function updateSuggestions(suggestions) {
+            const container = document.getElementById('suggestions');
+            container.innerHTML = '';
+
+            if (!suggestions || !suggestions.length) {
+                container.innerHTML = '<p class="text-gray-500">No suggestions available.</p>';
+                return;
+            }
+
+            suggestions.forEach(suggestion => {
+                const card = document.createElement('div');
+                card.className = 'suggestion-card bg-blue-50 border-l-4 border-blue-400 p-4';
+                card.innerHTML = `<p class="text-gray-700">${suggestion}</p>`;
+                container.appendChild(card);
+            });
+        }
+
+        function updateFactCheck(factCheck) {
+            const container = document.getElementById('fact-check-results');
+            container.innerHTML = '';
+
+            if (!factCheck || !factCheck.claims) {
+                container.innerHTML = '<p class="text-gray-500">No fact-checking results available.</p>';
+                return;
+            }
+
+            factCheck.claims.forEach(claim => {
+                const card = document.createElement('div');
+                card.className = 'suggestion-card bg-yellow-50 border-l-4 border-yellow-400 p-4';
+                card.innerHTML = `
+                    <p class="text-gray-700">${claim.text}</p>
+                    <p class="text-sm text-gray-500 mt-1">Status: ${claim.status}</p>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        // Add export functionality
+        document.getElementById('export-btn').addEventListener('click', () => {
+            const analysisData = {
+                biasScore: document.getElementById('bias-score').textContent,
+                biasDescription: document.getElementById('bias-description').textContent,
+                biasCategories: Array.from(document.getElementById('bias-categories').children).map(card => ({
+                    category: card.querySelector('h4').textContent,
+                    count: card.querySelector('p').textContent
+                })),
+                suggestions: Array.from(document.getElementById('suggestions').children).map(card => 
+                    card.querySelector('p').textContent
+                ),
+                factCheckResults: Array.from(document.getElementById('fact-check-results').children).map(card => ({
+                    claim: card.querySelector('p').textContent,
+                    status: card.querySelector('p:last-child').textContent
+                }))
+            };
+
+            const blob = new Blob([JSON.stringify(analysisData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'article-analysis.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        });
+
+        // Add view toggle functionality
+        document.getElementById('toggle-view-btn').addEventListener('click', function() {
+            console.log('Toggle view button clicked'); // Debug log
+            
+            const originalView = document.getElementById('original-view');
+            const comparisonView = document.getElementById('comparison-view');
+            
+            console.log('Original view display:', originalView.style.display); // Debug log
+            console.log('Comparison view display:', comparisonView.style.display); // Debug log
+            
+            if (originalView.style.display === 'none') {
+                originalView.style.display = 'block';
+                comparisonView.style.display = 'none';
+                this.innerHTML = '<i class="fas fa-exchange-alt mr-2"></i>Show Comparison View';
+                console.log('Switching to original view'); // Debug log
+        } else {
+                originalView.style.display = 'none';
+                comparisonView.style.display = 'block';
+                this.innerHTML = '<i class="fas fa-exchange-alt mr-2"></i>Show Original View';
+                console.log('Switching to comparison view'); // Debug log
+            }
+        });
+
+        // Enhanced text-to-speech functionality
+        document.getElementById('tts-btn').addEventListener('click', async () => {
+            const content = document.getElementById('tts-text').value;
+            if (!content) {
+                alert('Please enter text to convert to speech');
+                return;
+            }
+
+            const ttsBtn = document.getElementById('tts-btn');
+            const ttsLoading = document.getElementById('tts-loading');
+            const ttsAudio = document.getElementById('tts-audio');
+            const voiceType = document.getElementById('voice-select').value;
+            const outputFormat = document.querySelector('input[name="audio-format"]:checked').value;
+
+            try {
+                // Show loading state
+                ttsBtn.disabled = true;
+                ttsLoading.classList.remove('hidden');
+                ttsAudio.classList.add('hidden');
+
+                console.log('Sending TTS request:', {
+                    text: content.substring(0, 100) + '...', // Log first 100 chars
+                    voice_type: voiceType,
+                    output_format: outputFormat
+                });
+
+                // Generate speech
+                const response = await fetch('/text-to-speech/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        text: content,
+                        voice_type: voiceType,
+                        output_format: outputFormat
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.detail || `Failed to generate speech: ${response.status}`);
+                }
+
+                // Get audio blob
+                const audioBlob = await response.blob();
+                const audioUrl = URL.createObjectURL(audioBlob);
+
+                // Update audio player
+                ttsAudio.src = audioUrl;
+                ttsAudio.classList.remove('hidden');
+                
+                // Add event listeners for audio player
+                ttsAudio.onerror = (e) => {
+                    console.error('Audio playback error:', e);
+                    alert('Error playing audio. Please try again.');
+                };
+                
+                ttsAudio.onended = () => {
+                    console.log('Audio playback completed');
+                };
+
+                // Play the audio
+                try {
+                    await ttsAudio.play();
+                    console.log('Audio playback started');
+                } catch (playError) {
+                    console.error('Error playing audio:', playError);
+                    alert('Error playing audio. Please try again.');
+                }
+
+            } catch (error) {
+                console.error('TTS Error:', error);
+                alert('Error generating speech: ' + error.message);
+            } finally {
+                // Reset UI
+                ttsBtn.disabled = false;
+                ttsLoading.classList.add('hidden');
+            }
+        });
+
+        // Load available voices
+        async function loadVoices() {
+            const voiceSelect = document.getElementById('voice-select');
+            const loadingOption = document.createElement('option');
+            loadingOption.textContent = 'Loading voices...';
+            voiceSelect.appendChild(loadingOption);
+
+            try {
+                console.log('Fetching available voices...');
+                const response = await fetch('/available-voices/');
+                
+                if (!response.ok) {
+                    throw new Error(`Failed to load voices: ${response.status}`);
+                }
+                
+                const voices = await response.json();
+                console.log('Loaded voices:', voices);
+                
+                // Clear loading option
+                voiceSelect.innerHTML = '';
+                
+                // Add voice options
+                voices.forEach(voice => {
+                    const option = document.createElement('option');
+                    option.value = voice.id;
+                    option.textContent = `${voice.name} - ${voice.description}`;
+                    voiceSelect.appendChild(option);
+                });
+                
+                console.log('Voice options populated');
+            } catch (error) {
+                console.error('Error loading voices:', error);
+                voiceSelect.innerHTML = '<option value="">Error loading voices</option>';
+                alert('Error loading voices: ' + error.message);
+            }
+        }
+
+        // Load voices when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('Page loaded, initializing TTS...');
+            loadVoices();
+        });
+
+        // Keyword generation functionality
+        document.getElementById('generate-keywords-btn').addEventListener('click', async () => {
+            const content = document.getElementById('article-content-keywords').value;
+            const maxKeywords = parseInt(document.getElementById('max-keywords').value);
+
+            if (!content) {
+                alert('Please enter article content');
+                return;
+            }
+
+            const loading = document.getElementById('loading');
+            const keywordsList = document.getElementById('keywords-list');
+
+            try {
+                loading.classList.remove('hidden');
+                keywordsList.innerHTML = '';
+
+                const response = await fetch('/generate_keywords/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        content,
+                        max_keywords: maxKeywords
+                    })
+                });
+
+                const data = await response.json();
+                
+                // Display keywords
+                data.keywords.forEach(keyword => {
+                    const tag = document.createElement('span');
+                    tag.className = 'bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm';
+                    tag.textContent = keyword;
+                    keywordsList.appendChild(tag);
+                });
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred while generating keywords');
+            } finally {
+                loading.classList.add('hidden');
+            }
+        });
+
+        // Metadata generation functionality
+        document.getElementById('generate-metadata-btn').addEventListener('click', async () => {
+            const content = document.getElementById('article-content-metadata').value;
+
+            if (!content) {
+                alert('Please enter article content');
+                return;
+            }
+
+            const loading = document.getElementById('loading');
+            const metadataContent = document.getElementById('metadata-content');
+
+            try {
+                loading.classList.remove('hidden');
+                metadataContent.innerHTML = '';
+
+                const response = await fetch('/generate_metadata/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        content
+                    })
+                });
+
+                const data = await response.json();
+                
+                // Display metadata
+                const metadataSections = [
+                    { title: 'Title', key: 'title' },
+                    { title: 'Summary', key: 'summary' },
+                    { title: 'Categories', key: 'categories' },
+                    { title: 'Word Count', key: 'word_count' },
+                    { title: 'Estimated Read Time', key: 'estimated_read_time', suffix: ' minutes' },
+                    { title: 'Entities', key: 'entities' }
+                ];
+
+                metadataSections.forEach(section => {
+                    const sectionDiv = document.createElement('div');
+                    sectionDiv.className = 'bg-gray-50 p-4 rounded-lg';
+                    
+                    const title = document.createElement('h4');
+                    title.className = 'font-semibold text-gray-700 mb-2';
+                    title.textContent = section.title;
+                    sectionDiv.appendChild(title);
+
+                    const content = document.createElement('div');
+                    content.className = 'text-gray-600';
+
+                    if (section.key === 'entities') {
+                        // Handle entities object
+                        Object.entries(data[section.key]).forEach(([type, items]) => {
+                            if (items.length > 0) {
+                                const entityType = document.createElement('div');
+                                entityType.className = 'mb-2';
+                                entityType.innerHTML = `<strong>${type}:</strong> ${items.join(', ')}`;
+                                content.appendChild(entityType);
+                            }
+                        });
+                    } else if (Array.isArray(data[section.key])) {
+                        // Handle arrays (like categories)
+                        content.textContent = data[section.key].join(', ');
+                    } else {
+                        // Handle simple values
+                        content.textContent = data[section.key] + (section.suffix || '');
+                    }
+
+                    sectionDiv.appendChild(content);
+                    metadataContent.appendChild(sectionDiv);
+                });
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred while generating metadata');
+      } finally {
+                loading.classList.add('hidden');
+      }
+    });
+  </script>
+</body>
+</html>
