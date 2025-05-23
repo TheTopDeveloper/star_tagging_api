@@ -5,7 +5,7 @@ This API provides text-to-speech conversion and article curation services. It su
 
 ## Base URL
 ```
-http://localhost:8000
+https://apiai.radioafrica.digital
 ```
 
 ## Authentication
@@ -78,7 +78,7 @@ export default async function handler(
   }
 
   try {
-    const response = await fetch('http://localhost:8000/text-to-speech/', {
+    const response = await fetch('https://apiai.radioafrica.digital/text-to-speech/', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -239,7 +239,7 @@ export default async function handler(
   }
 
   try {
-    const response = await fetch('http://localhost:8000/curate_article/', {
+    const response = await fetch('https://apiai.radioafrica.digital/curate_article/', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

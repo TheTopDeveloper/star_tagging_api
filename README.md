@@ -66,19 +66,19 @@ uvicorn app.main:app --reload
 ```
 
 2. Access the web interface:
-- Open your browser and navigate to `http://localhost:8000`
+- Open your browser and navigate to `https://apiai.radioafrica.digital`
 - Paste your text in the text area
 - Click "Generate Keywords" or "Generate Metadata"
 
 3. Using the API directly:
 ```bash
 # Generate keywords
-curl -X POST "http://localhost:8000/generate_keywords/" \
+curl -X POST "https://apiai.radioafrica.digital/generate_keywords/" \
      -H "Content-Type: application/json" \
      -d '{"content": "Your text here", "max_keywords": 15}'
 
 # Generate metadata
-curl -X POST "http://localhost:8000/generate_metadata/" \
+curl -X POST "https://apiai.radioafrica.digital/generate_metadata/" \
      -H "Content-Type: application/json" \
      -d '{"content": "Your text here"}'
 ```
@@ -106,8 +106,8 @@ metadata_generator = MetadataGenerator(use_cuda=True)
 ## API Documentation
 
 Once the server is running, you can access the interactive API documentation at:
-- Swagger UI: `http://localhost:8000/docs`
-- ReDoc: `http://localhost:8000/redoc`
+- Swagger UI: `https://apiai.radioafrica.digital/docs`
+- ReDoc: `https://apiai.radioafrica.digital/redoc`
 
 ## Project Structure
 
