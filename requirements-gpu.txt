@@ -5,7 +5,7 @@ pydantic>=1.10.8
 python-multipart>=0.0.6
 
 # Machine Learning and NLP (GPU-enabled)
---extra-index-url https://download.pytorch.org/whl/cu121
+--extra-index-url https://download.pytorch.org/whl/cu128
 torch==2.2.1
 torchvision==0.17.1
 torchaudio==2.2.1

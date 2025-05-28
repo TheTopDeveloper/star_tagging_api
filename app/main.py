@@ -8,21 +8,55 @@ from app.utils import clean_text, filter_keywords, is_valid_input
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse
 import os
+import torch
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
 # Serve frontend
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
-@app.get("/")
-def serve_frontend():
-    return FileResponse("app/static/index.html")
+def get_device() -> str:
+    """
+    Automatically detect and verify GPU availability.
+    Returns 'cuda' if GPU is available and working, 'cpu' otherwise.
+    """
+    if torch.cuda.is_available():
+        try:
+            # Test GPU with a small tensor operation
+            x = torch.rand(5, 3).cuda()
+            y = torch.rand(5, 3).cuda()
+            z = x + y
+            del x, y, z
+            torch.cuda.empty_cache()
+            
+            # Get GPU info
+            gpu_name = torch.cuda.get_device_name(0)
+            gpu_memory = torch.cuda.get_device_properties(0).total_memory / 1024**3  # Convert to GB
+            logger.info(f"GPU detected: {gpu_name} with {gpu_memory:.1f}GB memory")
+            return "cuda"
+        except Exception as e:
+            logger.warning(f"GPU test failed: {str(e)}")
+            logger.info("Falling back to CPU")
+            return "cpu"
+    else:
+        logger.info("No GPU available, using CPU")
+        return "cpu"
+
+# Get device for model initialization
+device = get_device()
+use_cuda = device == "cuda"
 
 # Load models once at startup
-extractor = KeywordExtractor(use_cuda=False)  # set True for server deployment
-metadata_generator = MetadataGenerator(use_cuda=False)  # set True for server deployment
-article_generator = ArticleGenerator(use_cuda=False)  # set True for server deployment
-tts_generator = TextToSpeech(use_cuda=False)  # set True for server deployment
+logger.info(f"Initializing models with device: {device}")
+extractor = KeywordExtractor(use_cuda=use_cuda)
+metadata_generator = MetadataGenerator(use_cuda=use_cuda)
+article_generator = ArticleGenerator(use_cuda=use_cuda)
+tts_generator = TextToSpeech(use_cuda=use_cuda)
 
 class Article(BaseModel):
     content: str

@@ -13,26 +13,73 @@ import soundfile as sf
 from scipy.io import wavfile
 import tempfile
 from datasets import load_dataset
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+def setup_device(use_cuda: bool) -> torch.device:
+    """
+    Set up the device for model operations with proper error handling.
+    Automatically detects and verifies GPU availability.
+    """
+    try:
+        if use_cuda:
+            if not torch.cuda.is_available():
+                logger.warning("CUDA requested but not available. Falling back to CPU.")
+                return torch.device("cpu")
+            
+            # Test GPU with a small tensor operation
+            try:
+                x = torch.rand(5, 3).cuda()
+                y = torch.rand(5, 3).cuda()
+                z = x + y
+                del x, y, z
+                torch.cuda.empty_cache()
+                
+                # Get GPU info
+                gpu_name = torch.cuda.get_device_name(0)
+                gpu_memory = torch.cuda.get_device_properties(0).total_memory / 1024**3  # Convert to GB
+                logger.info(f"GPU detected: {gpu_name} with {gpu_memory:.1f}GB memory")
+                return torch.device("cuda")
+            except Exception as e:
+                logger.error(f"GPU test failed: {str(e)}")
+                logger.warning("Falling back to CPU")
+                return torch.device("cpu")
+        else:
+            logger.info("Using CPU for model operations")
+            return torch.device("cpu")
+    except Exception as e:
+        logger.error(f"Error setting up device: {str(e)}")
+        return torch.device("cpu")
 
 class KeywordExtractor:
     def __init__(self, model_name: str = "facebook/bart-base", use_cuda: bool = False):
         self.model_name = model_name
-        self.device = torch.device("cuda" if use_cuda and torch.cuda.is_available() else "cpu")
+        self.device = setup_device(use_cuda)
         
-        # Enable model optimizations
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-        self.model = AutoModelForSeq2SeqLM.from_pretrained(
-            self.model_name,
-            torch_dtype=torch.float16 if self.device.type == "cuda" else torch.float32
-        ).to(self.device)
-        
-        # Enable model optimizations for inference
-        if self.device.type == "cuda":
-            self.model.eval()  # Set to evaluation mode
-            torch.backends.cudnn.benchmark = True  # Enable cuDNN auto-tuner
+        try:
+            # Enable model optimizations
+            self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+            self.model = AutoModelForSeq2SeqLM.from_pretrained(
+                self.model_name,
+                torch_dtype=torch.float16 if self.device.type == "cuda" else torch.float32
+            ).to(self.device)
             
-        # Load spaCy model for noun extraction
-        self.nlp = spacy.load("en_core_web_sm")
+            # Enable model optimizations for inference
+            if self.device.type == "cuda":
+                self.model.eval()  # Set to evaluation mode
+                torch.backends.cudnn.benchmark = True  # Enable cuDNN auto-tuner
+                torch.cuda.empty_cache()  # Clear GPU memory
+            
+            # Load spaCy model for noun extraction
+            self.nlp = spacy.load("en_core_web_sm")
+            logger.info(f"KeywordExtractor initialized successfully on {self.device.type}")
+            
+        except Exception as e:
+            logger.error(f"Error initializing KeywordExtractor: {str(e)}")
+            raise
 
     def extract_keywords(
         self, 
@@ -90,17 +137,16 @@ class KeywordExtractor:
 
 class MetadataGenerator:
     def __init__(self, use_cuda: bool = False):
-        self.device = torch.device("cuda" if use_cuda and torch.cuda.is_available() else "cpu")
+        self.device = setup_device(use_cuda)
         
-        # Enable model optimizations
-        torch.backends.cudnn.benchmark = True if self.device.type == "cuda" else False
-        
-        # Load models with optimizations
         try:
+            # Enable model optimizations
+            torch.backends.cudnn.benchmark = True if self.device.type == "cuda" else False
+            
             # Initialize summarizer with a public model
             summarizer_tokenizer = AutoTokenizer.from_pretrained(
                 "facebook/bart-base",
-                cache_dir="./model_cache"  # Cache models locally
+                cache_dir="./model_cache"
             )
             summarizer_model = AutoModelForSeq2SeqLM.from_pretrained(
                 "facebook/bart-base",
@@ -121,9 +167,9 @@ class MetadataGenerator:
                 max_length=100,
                 min_length=20,
                 do_sample=False,
-                num_beams=2,  # Reduced from 4 for speed
+                num_beams=2,
                 early_stopping=True,
-                batch_size=4  # Process multiple chunks at once
+                batch_size=4
             )
             
             # Initialize classifier with optimizations
@@ -139,16 +185,20 @@ class MetadataGenerator:
             
             if self.device.type == "cuda":
                 classifier_model.eval()
+                torch.cuda.empty_cache()
             
             self.classifier = pipeline(
                 "text-classification",
                 model=classifier_model,
                 tokenizer=classifier_tokenizer,
                 device=0 if self.device.type == "cuda" else -1,
-                batch_size=8  # Process multiple categories at once
+                batch_size=8
             )
+            
+            logger.info(f"MetadataGenerator initialized successfully on {self.device.type}")
+            
         except Exception as e:
-            print(f"Error loading models: {str(e)}")
+            logger.error(f"Error initializing MetadataGenerator: {str(e)}")
             raise
         
         # Load spaCy with optimizations
@@ -1160,87 +1210,51 @@ class ArticleGenerator:
 
 class TextToSpeech:
     def __init__(self, use_cuda: bool = False):
-        self.device = torch.device("cuda" if use_cuda and torch.cuda.is_available() else "cpu")
+        self.device = setup_device(use_cuda)
         
         try:
-            print("Initializing TextToSpeech model...")
+            logger.info("Initializing TextToSpeech model...")
             # Load processor, model, vocoder
             self.processor = SpeechT5Processor.from_pretrained(
                 "microsoft/speecht5_tts",
                 cache_dir="./model_cache"
             )
-            print("Loaded processor successfully")
+            logger.info("Loaded processor successfully")
             
             self.model = SpeechT5ForTextToSpeech.from_pretrained(
                 "microsoft/speecht5_tts",
                 torch_dtype=torch.float16 if self.device.type == "cuda" else torch.float32,
                 cache_dir="./model_cache"
             ).to(self.device)
-            print("Loaded model successfully")
+            logger.info("Loaded model successfully")
             
             self.vocoder = SpeechT5HifiGan.from_pretrained(
                 "microsoft/speecht5_hifigan",
                 torch_dtype=torch.float16 if self.device.type == "cuda" else torch.float32,
                 cache_dir="./model_cache"
             ).to(self.device)
-            print("Loaded vocoder successfully")
+            logger.info("Loaded vocoder successfully")
             
             # Load speaker embeddings dataset
-            print("Loading speaker embeddings...")
+            logger.info("Loading speaker embeddings...")
             self.speaker_embeddings_dataset = load_dataset("Matthijs/cmu-arctic-xvectors", split="validation")
-            print("Loaded speaker embeddings successfully")
-            
-            # Define voice configurations with speaker IDs from CMU Arctic dataset
-            # Each ID corresponds to a different speaker in the dataset
-            self.voices = {
-                "professional": {
-                    "speaker_id": 7306,  # CMU speaker ID for a professional voice
-                    "description": "Clear, formal voice suitable for business and professional content"
-                },
-                "news_anchor": {
-                    "speaker_id": 7307,  # CMU speaker ID for a news anchor voice
-                    "description": "Authoritative voice perfect for news articles and reports"
-                },
-                "casual": {
-                    "speaker_id": 7308,  # CMU speaker ID for a casual voice
-                    "description": "Friendly, conversational voice for informal content"
-                },
-                "deep_voice": {
-                    "speaker_id": 7309,  # CMU speaker ID for a deep voice
-                    "description": "Rich, deep voice for dramatic or serious content"
-                },
-                "young_voice": {
-                    "speaker_id": 7310,  # CMU speaker ID for a young voice
-                    "description": "Bright, energetic voice for youth-oriented content"
-                },
-                "senior_voice": {
-                    "speaker_id": 7311,  # CMU speaker ID for a senior voice
-                    "description": "Mature, experienced voice for wisdom and authority"
-                },
-                "energetic": {
-                    "speaker_id": 7312,  # CMU speaker ID for an energetic voice
-                    "description": "Dynamic, enthusiastic voice for exciting content"
-                },
-                "calm": {
-                    "speaker_id": 7313,  # CMU speaker ID for a calm voice
-                    "description": "Soothing, peaceful voice for relaxation content"
-                }
-            }
+            logger.info("Loaded speaker embeddings successfully")
             
             if self.device.type == "cuda":
                 self.model.eval()
                 self.vocoder.eval()
                 torch.backends.cudnn.benchmark = True
+                torch.cuda.empty_cache()
             
-            print("TextToSpeech initialization completed successfully")
+            logger.info(f"TextToSpeech initialization completed successfully on {self.device.type}")
             
         except Exception as e:
-            print(f"Error initializing TTS models: {str(e)}")
+            logger.error(f"Error initializing TTS models: {str(e)}")
             raise RuntimeError(f"Failed to initialize TextToSpeech: {str(e)}")
 
     def _preprocess_text_for_pronunciation(self, text: str) -> str:
         """
-        Preprocess text to improve pronunciation of names and places.
+        Preprocess text to improve pronunciation of names and places using our comprehensive dictionary.
         """
         try:
             # Load spaCy model if not already loaded
@@ -1248,128 +1262,24 @@ class TextToSpeech:
                 import spacy
                 self.nlp = spacy.load("en_core_web_sm")
             
+            # Import our pronunciation dictionary
+            from app.utils.pronunciation_dict import PRONUNCIATION_DICT
+            
             # Process text with spaCy
             doc = self.nlp(text)
-            
-            # Dictionary of common name/place pronunciations
-            pronunciation_dict = {
-                # Kenyan Political and Public Figures
-                "Otieno": "oh-TEE-en-oh",
-                "Omondi": "oh-MON-dee",
-                "Oluoch": "oh-LOO-och",
-                "Mudavadi": "moo-dah-VAH-dee",
-                "Kalonzo": "kah-LON-zo",
-                "Ruto": "ROO-toh",
-                "Matiangi": "mah-tee-AN-gee",
-                "Gachagua": "gah-CHA-goo-ah",
-                "Odinga": "oh-DING-ah",
-                "Maraga": "mah-RAH-gah",
-                
-                # Kenyan Names
-                "Kamau": "KAH-mow",
-                "Wanjiku": "wan-JEE-koo",
-                "Muthoni": "moo-THO-nee",
-                "Njeri": "NJER-ee",
-                "Wanjiru": "wan-JEE-roo",
-                "Kariuki": "kah-ree-OO-kee",
-                "Mwangi": "MWAN-gee",
-                "Njoroge": "njo-RO-geh",
-                "Wambui": "wam-BOO-ee",
-                "Mumbi": "MOOM-bee",
-                "Githinji": "gee-THIN-jee",
-                "Wairimu": "why-REE-moo",
-                "Nyambura": "nyam-BOO-rah",
-                "Wachira": "wah-CHEE-rah",
-                "Mugo": "MOO-go",
-                "Wanjira": "wan-JEE-rah",
-                "Kamande": "kah-MAN-deh",
-                "Wambugu": "wam-BOO-goo",
-                "Muriuki": "moo-ree-OO-kee",
-                "Wanjala": "wan-JAH-lah",
-                
-                # Kenyan Places
-                "Nairobi": "ny-ROH-bee",
-                "Mombasa": "mom-BAH-sah",
-                "Kisumu": "kee-SOO-moo",
-                "Nakuru": "nah-KOO-roo",
-                "Eldoret": "el-dor-ET",
-                "Thika": "THEE-kah",
-                "Kakamega": "kah-kah-MAY-gah",
-                "Meru": "MEH-roo",
-                "Nyeri": "NYER-ee",
-                "Machakos": "mah-CHAH-kos",
-                "Kisii": "kee-SEE",
-                "Kerugoya": "keh-roo-GOY-ah",
-                "Naivasha": "ny-VAH-shah",
-                "Kitale": "kee-TAH-leh",
-                "Malindi": "mah-LIN-dee",
-                "Lamu": "LAH-moo",
-                "Garissa": "gah-REE-sah",
-                "Wajir": "WAH-jeer",
-                "Mandera": "man-DER-ah",
-                "Marsabit": "mar-SAH-bit",
-                
-                # Kenyan Regions and Landmarks
-                "Rift Valley": "RIFT VAL-ee",
-                "Mount Kenya": "mount KEN-yah",
-                "Lake Victoria": "lake vik-TOR-ee-ah",
-                "Tsavo": "TSAH-vo",
-                "Amboseli": "am-BO-sel-ee",
-                "Maasai Mara": "mah-SIGH MAH-rah",
-                "Samburu": "sam-BOO-roo",
-                "Turkana": "tur-KAH-nah",
-                "Aberdare": "AB-er-dare",
-                "Kilimanjaro": "kil-ee-man-JAR-oh",
-                
-                # Common name pronunciations
-                "John": "JON",
-                "Mary": "MAIR-ee",
-                "Michael": "MIKE-ul",
-                "Sarah": "SAIR-uh",
-                "David": "DAY-vid",
-                "Elizabeth": "ee-LIZ-uh-beth",
-                "Robert": "ROB-ert",
-                "Jennifer": "JEN-uh-fur",
-                "William": "WILL-yum",
-                "Emma": "EM-uh",
-                
-                # Common place pronunciations
-                "Paris": "PAIR-iss",
-                "London": "LUN-dun",
-                "New York": "NEW YAWK",
-                "Los Angeles": "loss AN-juh-lus",
-                "Chicago": "shuh-KAW-go",
-                "Houston": "HYOO-stun",
-                "Miami": "my-AM-ee",
-                "Seattle": "see-AT-ul",
-                "Boston": "BAW-stun",
-                "Denver": "DEN-ver",
-                
-                # Common company names
-                "Google": "GOO-gul",
-                "Microsoft": "MY-cro-soft",
-                "Apple": "APP-ul",
-                "Amazon": "AM-uh-zon",
-                "Facebook": "FACE-book",
-                "Tesla": "TESS-luh",
-                "Twitter": "TWIT-ter",
-                "Netflix": "NET-flix",
-                "Uber": "OO-ber",
-                "Airbnb": "AIR-bee-and-bee"
-            }
             
             # Process each sentence
             processed_sentences = []
             for sent in doc.sents:
                 processed_words = []
                 for token in sent:
-                    # Check if the token is a proper noun
+                    # Check if the token is a proper noun or part of a named entity
                     if token.ent_type_ in ['PERSON', 'GPE', 'LOC', 'ORG']:
                         # Get the full entity span
                         entity = token.ent_
                         # Look up pronunciation in dictionary
-                        if entity in pronunciation_dict:
-                            processed_words.append(pronunciation_dict[entity])
+                        if entity in PRONUNCIATION_DICT:
+                            processed_words.append(PRONUNCIATION_DICT[entity])
                         else:
                             # For unknown entities, add spaces between letters to help pronunciation
                             processed_words.append(" ".join(entity))
@@ -1390,7 +1300,7 @@ class TextToSpeech:
         Generate speech from text with specified voice.
         """
         try:
-            print(f"Generating speech for voice type: {voice_type}")
+            logger.info(f"Generating speech for voice type: {voice_type}")
             
             # Validate inputs
             if not text or not text.strip():
@@ -1404,19 +1314,19 @@ class TextToSpeech:
             
             # Get voice configuration
             voice_config = self.voices[voice_type]
-            print(f"Using speaker ID: {voice_config['speaker_id']}")
+            logger.info(f"Using speaker ID: {voice_config['speaker_id']}")
             
             # Clean and prepare text
             cleaned_text = clean_text(text)
-            print(f"Cleaned text length: {len(cleaned_text)}")
+            logger.info(f"Cleaned text length: {len(cleaned_text)}")
             
             # Preprocess text for better pronunciation
             processed_text = self._preprocess_text_for_pronunciation(cleaned_text)
-            print("Text preprocessed for pronunciation")
+            logger.info("Text preprocessed for pronunciation")
             
             # Split text into sentences
             sentences = [s.strip() for s in processed_text.split('.') if s.strip()]
-            print(f"Split into {len(sentences)} sentences")
+            logger.info(f"Split into {len(sentences)} sentences")
             
             # Process text in chunks
             all_speech = []
@@ -1425,7 +1335,7 @@ class TextToSpeech:
             
             for i in range(0, len(sentences), chunk_size):
                 chunk = '. '.join(sentences[i:i + chunk_size]) + '.'
-                print(f"Processing chunk {i//chunk_size + 1} of {(len(sentences) + chunk_size - 1)//chunk_size}")
+                logger.info(f"Processing chunk {i//chunk_size + 1} of {(len(sentences) + chunk_size - 1)//chunk_size}")
                 
                 try:
                     # Process text with truncation
@@ -1458,7 +1368,7 @@ class TextToSpeech:
                     all_speech.append(speech_np)
                     
                 except Exception as chunk_error:
-                    print(f"Error processing chunk: {str(chunk_error)}")
+                    logger.error(f"Error processing chunk: {str(chunk_error)}")
                     continue
             
             if not all_speech:
@@ -1480,7 +1390,7 @@ class TextToSpeech:
             sampling_rate = 16000
             
             # Save audio file in specified format
-            print(f"Saving audio in {output_format} format...")
+            logger.info(f"Saving audio in {output_format} format...")
             if output_format == "wav":
                 sf.write(output_path, final_speech, sampling_rate)
             elif output_format in ["mp3", "ogg"]:
@@ -1493,15 +1403,15 @@ class TextToSpeech:
                     channels=1
                 )
                 audio.export(output_path, format=output_format)
-            print(f"Audio saved successfully to {output_path}")
+            logger.info(f"Audio saved successfully to {output_path}")
             
             return output_path
             
         except Exception as e:
-            print(f"Error generating speech: {str(e)}")
-            print(f"Error type: {type(e).__name__}")
+            logger.error(f"Error generating speech: {str(e)}")
+            logger.error(f"Error type: {type(e).__name__}")
             import traceback
-            print(f"Traceback: {traceback.format_exc()}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
             raise RuntimeError(f"Failed to generate speech: {str(e)}")
 
     def get_available_voices(self) -> List[Dict]:
@@ -1516,6 +1426,6 @@ class TextToSpeech:
                 for voice_id, config in self.voices.items()
             ]
         except Exception as e:
-            print(f"Error getting available voices: {str(e)}")
+            logger.error(f"Error getting available voices: {str(e)}")
             raise RuntimeError(f"Failed to get available voices: {str(e)}")
 
