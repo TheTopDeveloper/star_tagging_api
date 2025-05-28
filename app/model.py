@@ -25,13 +25,9 @@ def setup_device(use_cuda: bool) -> torch.device:
     Automatically detects and verifies GPU availability.
     """
     try:
-        if use_cuda:
-            if not torch.cuda.is_available():
-                logger.warning("CUDA requested but not available. Falling back to CPU.")
-                return torch.device("cpu")
-            
-            # Test GPU with a small tensor operation
+        if use_cuda and torch.cuda.is_available():
             try:
+                # Test GPU with a small tensor operation
                 x = torch.rand(5, 3).cuda()
                 y = torch.rand(5, 3).cuda()
                 z = x + y
@@ -42,7 +38,12 @@ def setup_device(use_cuda: bool) -> torch.device:
                 gpu_name = torch.cuda.get_device_name(0)
                 gpu_memory = torch.cuda.get_device_properties(0).total_memory / 1024**3  # Convert to GB
                 logger.info(f"GPU detected: {gpu_name} with {gpu_memory:.1f}GB memory")
-                return torch.device("cuda")
+                
+                # Set device
+                device = torch.device("cuda")
+                # Enable cuDNN benchmarking for better performance
+                torch.backends.cudnn.benchmark = True
+                return device
             except Exception as e:
                 logger.error(f"GPU test failed: {str(e)}")
                 logger.warning("Falling back to CPU")
@@ -64,13 +65,13 @@ class KeywordExtractor:
             self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
             self.model = AutoModelForSeq2SeqLM.from_pretrained(
                 self.model_name,
-                torch_dtype=torch.float16 if self.device.type == "cuda" else torch.float32
-            ).to(self.device)
+                torch_dtype=torch.float16 if self.device.type == "cuda" else torch.float32,
+                device_map="auto"  # Let the model handle device placement
+            )
             
             # Enable model optimizations for inference
             if self.device.type == "cuda":
                 self.model.eval()  # Set to evaluation mode
-                torch.backends.cudnn.benchmark = True  # Enable cuDNN auto-tuner
                 torch.cuda.empty_cache()  # Clear GPU memory
             
             # Load spaCy model for noun extraction
