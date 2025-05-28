@@ -10,6 +10,7 @@ torch==2.2.1+cu121
 torchvision==0.17.1+cu121
 torchaudio==2.2.1+cu121
 transformers>=4.40.0
+accelerate>=0.27.0
 spacy>=3.7.4
 numpy>=1.24.0
 datasets>=2.19.0

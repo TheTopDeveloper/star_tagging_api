@@ -63,16 +63,21 @@ class KeywordExtractor:
         try:
             # Enable model optimizations
             self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-            self.model = AutoModelForSeq2SeqLM.from_pretrained(
-                self.model_name,
-                torch_dtype=torch.float16 if self.device.type == "cuda" else torch.float32,
-                device_map="auto"  # Let the model handle device placement
-            )
             
-            # Enable model optimizations for inference
+            # Initialize model with appropriate device settings
             if self.device.type == "cuda":
-                self.model.eval()  # Set to evaluation mode
-                torch.cuda.empty_cache()  # Clear GPU memory
+                self.model = AutoModelForSeq2SeqLM.from_pretrained(
+                    self.model_name,
+                    torch_dtype=torch.float16,
+                    device_map="auto"
+                )
+                self.model.eval()
+                torch.cuda.empty_cache()
+            else:
+                self.model = AutoModelForSeq2SeqLM.from_pretrained(
+                    self.model_name,
+                    torch_dtype=torch.float32
+                ).to(self.device)
             
             # Load spaCy model for noun extraction
             self.nlp = spacy.load("en_core_web_sm")
