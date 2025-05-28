@@ -5,12 +5,13 @@ pydantic>=1.10.8
 python-multipart>=0.0.6
 
 # Machine Learning and NLP (GPU-enabled)
---extra-index-url https://download.pytorch.org/whl/cu121
-torch==2.2.1+cu121
-torchvision==0.17.1+cu121
-torchaudio==2.2.1+cu121
+--extra-index-url https://download.pytorch.org/whl/nightly/cu121
+torch>=2.3.0.dev20240320
+torchvision>=0.18.0.dev20240320
+torchaudio>=2.3.0.dev20240320
 transformers>=4.40.0
 accelerate>=0.27.0
+bitsandbytes>=0.41.1
 spacy>=3.7.4
 numpy>=1.24.0
 datasets>=2.19.0

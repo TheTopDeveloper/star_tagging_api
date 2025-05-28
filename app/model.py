@@ -66,14 +66,16 @@ class KeywordExtractor:
             
             # Initialize model with appropriate device settings
             if self.device.type == "cuda":
+                # Use device_map for GPU
                 self.model = AutoModelForSeq2SeqLM.from_pretrained(
                     self.model_name,
                     torch_dtype=torch.float16,
-                    device_map="auto"
+                    device_map={"": self.device}
                 )
                 self.model.eval()
                 torch.cuda.empty_cache()
             else:
+                # Direct device placement for CPU
                 self.model = AutoModelForSeq2SeqLM.from_pretrained(
                     self.model_name,
                     torch_dtype=torch.float32
