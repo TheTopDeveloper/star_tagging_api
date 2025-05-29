@@ -20,6 +20,10 @@ app = FastAPI()
 # Serve frontend
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
+@app.get("/")
+async def read_root():
+    return FileResponse("app/static/index.html")
+
 def get_device() -> str:
     """
     Automatically detect and verify GPU availability.

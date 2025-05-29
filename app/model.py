@@ -1220,6 +1220,30 @@ class TextToSpeech:
     def __init__(self, use_cuda: bool = False):
         self.device = setup_device(use_cuda)
         
+        # Define available voices
+        self.voices = {
+            "professional": {
+                "speaker_id": 0,
+                "description": "Clear, professional voice suitable for business and formal content"
+            },
+            "casual": {
+                "speaker_id": 1,
+                "description": "Friendly, casual voice suitable for informal content"
+            },
+            "news": {
+                "speaker_id": 2,
+                "description": "Authoritative voice suitable for news and reporting"
+            },
+            "storytelling": {
+                "speaker_id": 3,
+                "description": "Engaging voice suitable for storytelling and narrative content"
+            },
+            "technical": {
+                "speaker_id": 4,
+                "description": "Clear, precise voice suitable for technical content"
+            }
+        }
+        
         try:
             logger.info("Initializing TextToSpeech model...")
             # Load processor, model, vocoder
